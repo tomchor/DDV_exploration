@@ -1,0 +1,8 @@
+__pycache__/*
+data/*
+figures/*
+figures_check/*
+figures_paper/*
+figures_poster/*
+anims/*
+.*.swp
