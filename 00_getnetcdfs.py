@@ -10,9 +10,7 @@ path = '/data/1/tomaschor/LES05/{}'
 names=["conv_coarse", "conv_atcoarse"]
 names=["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine", "conv_nccoarse",]
 names=["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine", "conv_nccoarse", "conv_cbig2", "conv_negcoarse"]
-#names=["conv_negcoarse",]
-#names=["conv_cbig2",]
-#names=["conv_csmall", "conv_coarse", "conv_atcoarse", "conv_nccoarse",]
+names=["conv_cbig2", "conv_negcoarse",]
 
 Nts=[100]*len(names)
 
@@ -41,7 +39,12 @@ for nn, name in enumerate(names):
     # Get the velocities on parallel at the appropriate times
     for time in times:
         #++++ create reading options
-        uvw_file, θ_file = out.binaries.loc[time][["uvw_jt", "theta_jt"]]
+        if "cbig2" not in name:
+            uvw_file, θ_file = out.binaries.loc[time][["uvw_jt", "theta_jt"]]
+            nc_file = uvw_file.replace("uvw_jt", f"out.{name}_").replace(".sbin", ".nc")
+        else:
+            field_file, = out.binaries.loc[time][["field_"]]
+            nc_file = field_file.replace("field_", f"out.{name}_").replace(".out", ".nc")
         opts = dict(simulation=sim, nz=(sim.nz_tot+1)*3//4)
         #----
 
@@ -60,7 +63,6 @@ for nn, name in enumerate(names):
         dsout.attrs = { k : v for k, v in dsout.attrs.items() if v is not None } # Remove None values
         dsout.attrs = { k : (v if (type(v) is not bool) else int(v)) for k, v in dsout.attrs.items() } # Remove bool values
 
-        nc_file = uvw_file.replace("uvw_jt", f"out.{name}_").replace(".sbin", ".nc")
         print(f"Creating {nc_file}")
         dsout.to_netcdf(nc_file)
 
