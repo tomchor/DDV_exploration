@@ -1,6 +1,7 @@
 import numpy as np
 import lespy as lp
 import xarray as xr
+from aux01_ddvutils import chunk4d
 #from dask.distributed import Client
 #client = Client(memory_limit='20GB', processes=False, n_workers=2)
 
@@ -9,12 +10,11 @@ path = '/data/1/tomaschor/LES05/{}'
 
 names=["conv_coarse", "conv_atcoarse"]
 names=["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine", "conv_nccoarse",]
-names=["conv_negcoarse",]
-names=["conv_cbig2",]
-names=["conv_csmall",]
+names=["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine", "conv_nccoarse", "conv_cbig2", "conv_negcoarse"]
+#names=["conv_negcoarse",]
+#names=["conv_cbig2",]
+#names=["conv_csmall",]
 
-Nts=[30, 30, 30, 30]
-evfine = 5
 tchunk = 2
 
 
@@ -23,53 +23,30 @@ tchunk = 2
 #    nn, name = 0, names[0]
 for nn, name in enumerate(names):
     print(name)
-    Nt = Nts[nn]
+    output_path = path.format(name)+'/output'
 
-    #-----
-    if "cbig2" in name:
-        sim = lp.Simulation_sp(path.format(name)+'/readin/param.nml')
-        out = lp.Output_sp(path.format(name)+'/output')
-        depth = 50
-    else:
-        sim = lp.Simulation(path.format(name))
-        out = lp.Output(path.format(name)+'/output')
-        depth = 90
+    #+++++ Read data and get it ready
+    du = xr.open_dataset(output_path+f'/out.{name}_full.nc')
+    du = chunk4d(du, time_var="itime", round_func=np.ceil)
+    du["w"] = du.w.interp(zF=du.z)
     #-----
 
     #-----
-    if "fine" in name:
-        ev=evfine
-    else:
-        ev=1
-    times = out.binaries[-Nt*ev:][::-1][::ev].index[::-1]
-    #-----
-
-    #-----
-    # Get the velocities on parallel at the appropriate times
-    u,v,w = out.compose_uvw(simulation=sim, apply_to_z=False, times=times, nz=int(depth/sim.domain.dz), chunksize=tchunk)
-    θ = out.compose_theta(simulation=sim, apply_to_z=False, times=times, nz=int(depth/sim.domain.dz), chunksize=tchunk)
-    #-----
-
-    #-----
-    # Get only the top of the
-    du = xr.Dataset(dict(u=u, v=v, θ=θ))
+    # Possibly focus only on the surface if the dataset is too large
     if len(du.z)>200:
         z_slim = xr.concat([ du.z.sel(z=slice(0, -30)), du.z.sel(z=slice(-30, None, 5)) ], dim="z")
         du = du.sel(z=z_slim)
-    du["w"] = w.interp(coords=dict(z=du.z))
     print("Sorting")
     du = du.sortby("z")
     print("Done sorting")
-    u, v, w, θ = 1,1,1,1
-    del u, v, w, θ
     #-----
 
     #-----
     # Get the velocity gradient tensor
     try:
-        vel_grad = lp.vector.velgrad_tensor2d([du.u, du.v], simulation=sim)
+        vel_grad = lp.vector.velgrad_tensor2d([du.u, du.v], simulation=None)
     except ValueError:
-        vel_grad = lp.vector.velgrad_tensor2d([du.u, du.v], simulation=sim, real=False)
+        vel_grad = lp.vector.velgrad_tensor2d([du.u, du.v], simulation=None, real=False)
     #-----
 
     #------
