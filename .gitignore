@@ -6,3 +6,4 @@ figures_paper/*
 figures_poster/*
 anims/*
 .*.swp
+*.nc
