@@ -3,6 +3,7 @@ import lespy as lp
 import xarray as xr
 from aux01_ddvutils import chunk4d
 import dask
+diff_fft = lp.numerical.diff_fft_xr
 
 #++++ First run this command on IPython
 # memory_limit is the limit per worker
@@ -18,9 +19,6 @@ names=["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine", "conv_nccoars
 names=["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine", "conv_nccoarse", "conv_cbig2", "conv_negcoarse"]
 
 
-
-#def runmain():
-#    nn, name = 0, names[0]
 for nn, name in enumerate(names):
     print(name)
     output_path = path.format(name)+'/output'
@@ -45,30 +43,22 @@ for nn, name in enumerate(names):
     print("Done sorting")
     #-----
 
-    #-----
-    # Get the velocity gradient tensor
-    try:
-        vel_grad = lp.vector.velgrad_tensor2d([du.u, du.v], simulation=None)
-    except ValueError:
-        vel_grad = lp.vector.velgrad_tensor2d([du.u, du.v], simulation=None, real=False)
-    #-----
-
     #------
     # Calculate vertical vorticty for every point
     print("Calculating vertical vort")
-    ζ = vel_grad[1,0] - vel_grad[0,1]
+    ζ = diff_fft(du.v, dim="x") - diff_fft(du.u, dim="y")
     #------
 
     #------
     # Calculate Okubo-Weiss parameter for every point
     print("Calculating horizontal divergence")
-    hdiv = vel_grad[0,0] + vel_grad[1,1]
+    hdiv = diff_fft(du.u, dim="x") + diff_fft(du.v, dim="y")
     #------
 
-    print("Saving...", name)
+    outname = f'data/vort_{name}.nc'
+    print("Saving to ", outname)
     ζ.attrs = dict(long_name="Vorticity", short_name="ζ", units="1/s")
     hdiv.attrs = dict(long_name="Horizontal divergence", short_name="Div", units="1/s")
     ds = xr.Dataset(dict(ζ=ζ, hdiv=hdiv, w=du.w, θ=du.θ))
-    ds.to_netcdf(f'data/vort_{name}.nc')
+    ds.to_netcdf(outname)
 
-#    exit()
