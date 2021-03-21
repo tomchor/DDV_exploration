@@ -2,8 +2,13 @@ import numpy as np
 import lespy as lp
 import xarray as xr
 from aux01_ddvutils import chunk4d
+import dask
+
+#++++ First run this command on IPython
+# memory_limit is the limit per worker
 #from dask.distributed import Client
-#client = Client(memory_limit='20GB', processes=False, n_workers=2)
+#client = Client(n_workers=22, memory_limit='4GB', threads_per_worker=1, processes=True)
+#----
 
 
 path = '/data/1/tomaschor/LES05/{}'
@@ -11,11 +16,6 @@ path = '/data/1/tomaschor/LES05/{}'
 names=["conv_coarse", "conv_atcoarse"]
 names=["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine", "conv_nccoarse",]
 names=["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine", "conv_nccoarse", "conv_cbig2", "conv_negcoarse"]
-#names=["conv_negcoarse",]
-#names=["conv_cbig2",]
-#names=["conv_csmall",]
-
-tchunk = 2
 
 
 
@@ -25,19 +25,23 @@ for nn, name in enumerate(names):
     print(name)
     output_path = path.format(name)+'/output'
 
-    #+++++ Read data and get it ready
+    #+++++ Read data
     du = xr.open_dataset(output_path+f'/out.{name}_full.nc')
-    du = chunk4d(du, time_var="itime", round_func=np.ceil)
-    du["w"] = du.w.interp(zF=du.z)
+    du = du.isel(itime=slice(-50, None))
     #-----
 
+    #+++++ Make the data smaller (focus on first 35 m)
+    z_slim = xr.concat([ du.z.sel(z=slice(0, -35)), du.z.sel(z=slice(-35, None, 5)) ], dim="z")
+    du = du.sel(z=z_slim)
+    du = chunk4d(du, time_var="itime", round_func=np.ceil)
+    with dask.config.set(**{'array.slicing.split_large_chunks': True}):
+        du["w"] = du.w.interp(zF=du.z)
     #-----
-    # Possibly focus only on the surface if the dataset is too large
-    if len(du.z)>200:
-        z_slim = xr.concat([ du.z.sel(z=slice(0, -30)), du.z.sel(z=slice(-30, None, 5)) ], dim="z")
-        du = du.sel(z=z_slim)
+
+    #+++++ Focus on the surface if the dataset is too large
     print("Sorting")
-    du = du.sortby("z")
+    with dask.config.set(**{'array.slicing.split_large_chunks': True}): # Avoid warning of big slice
+        du = du.sortby("z")
     print("Done sorting")
     #-----
 
