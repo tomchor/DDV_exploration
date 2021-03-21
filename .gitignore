@@ -7,3 +7,4 @@ figures_poster/*
 anims/*
 .*.swp
 *.nc
+dask-worker-space/*
