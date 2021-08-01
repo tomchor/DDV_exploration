@@ -8,9 +8,7 @@ from aux00_siminfo import useful_attrs
 path = '/data/1/tomaschor/LES05/{}'
 
 names=["conv_coarse", "conv_atcoarse"]
-names=["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine", "conv_nccoarse",]
-names=["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine", "conv_nccoarse", "conv_cbig2", "conv_negcoarse"]
-#names=["conv_cbig2", "conv_negcoarse",]
+names=["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine", "conv_nccoarse", "conv_ncatcoarse", "conv_cbig2", "conv_negcoarse"]
 
 Nts=[100]*len(names)
 

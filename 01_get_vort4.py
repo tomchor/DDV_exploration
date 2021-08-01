@@ -3,6 +3,7 @@ import lespy as lp
 import xarray as xr
 from aux01_ddvutils import chunk4d
 import dask
+from dask.diagnostics import ProgressBar
 diff_fft = lp.numerical.diff_fft_xr
 
 #++++ First run this command on IPython
@@ -14,9 +15,8 @@ diff_fft = lp.numerical.diff_fft_xr
 
 path = '/data/1/tomaschor/LES05/{}'
 
-names=["conv_coarse", "conv_atcoarse"]
-names=["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine", "conv_nccoarse",]
-names=["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine", "conv_nccoarse", "conv_cbig2", "conv_negcoarse"]
+#names=["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine", "conv_nccoarse", "conv_ncatcoarse", "conv_cbig2", "conv_negcoarse"]
+names=["conv_ncatcoarse",]
 
 
 for nn, name in enumerate(names):
@@ -56,9 +56,12 @@ for nn, name in enumerate(names):
     #------
 
     outname = f'data/vort_{name}.nc'
-    print("Saving to ", outname)
     ζ.attrs = dict(long_name="Vorticity", short_name="ζ", units="1/s")
     hdiv.attrs = dict(long_name="Horizontal divergence", short_name="Div", units="1/s")
     ds = xr.Dataset(dict(ζ=ζ, hdiv=hdiv, w=du.w, θ=du.θ))
-    ds.to_netcdf(outname)
+    delayed_nc = ds.to_netcdf(outname, compute=False)
+    print(f"Saving to {outname}...")
+    with ProgressBar():
+        results = delayed_nc.compute()
+    print(f"\nDone saving to {outname}")
 
