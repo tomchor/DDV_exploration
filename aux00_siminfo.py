@@ -12,3 +12,12 @@ useful_attrs = ['inversion_depth', 'inv_depth',
                 'w_star', 'Δx', 'Δy', 'Δz']
 
 
+pnames = dict(conv_coarse = "FS-R",
+              conv_atcoarse = "NS-R", 
+              conv_fine = "none", 
+              conv_atfine = "none", 
+              conv_nccoarse = "FS-NR",
+              conv_ncatcoarse = "NS-NR", 
+              conv_cbig2 = "FS-R-F", 
+              conv_negcoarse = "none",
+              )
