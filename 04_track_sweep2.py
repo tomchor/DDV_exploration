@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import pims
 import lespy as lp
-from aux_ddv import upodd
 from os import system
+from dask.diagnostics import ProgressBar
 
 path = '/data/1/tomaschor/LES05/{}'
 #names = ["conv_coarse", "conv_atcoarse"]
@@ -13,26 +13,26 @@ names = ["conv_fine", "conv_atfine"]
 names = ["conv_coarse", "conv_atcoarse", "conv_fine", "conv_atfine"]
 names = ["conv_atcoarse", "conv_fine", "conv_atfine"]
 names = ["conv_coarse", "conv_nccoarse", "conv_atcoarse", "conv_ncatcoarse"]
-names = ["conv_negcoarse",]
 names = ["conv_cbig2",]
-names = ["conv_csmall",]
+names = ["conv_negcoarse",]
 
 #names = ["conv_coarse", "conv_nccoarse", "conv_atcoarse", "conv_ncatcoarse", "conv_cbig2",]
 
 depth = -1.6 # meters
 diams = [ 5, 7, 9, 11, 13 ]
-masses = np.array([160, 220, 280, 340, 400, 460, 520, 580, 640, 700, 760]) # In m**2/s
+masses = np.array([160, 220, 280, 340, 400, 460, 520, 580, 640, 700, 760]) # Actually circulation (probably), in m**2/s
 for diam in diams:
-    for vortex_dcirc in circulations:
+    for vortex_dcirc in masses:
         print(f"diam: {diam}\nmass: {vortex_dcirc}")
         for nn, name in enumerate(names):
-            #-----
+            #+++++
             if "cbig2" in name:
                 sim = lp.Simulation_sp(path.format(name)+'/readin/param.nml')
             else:
                 sim = lp.Simulation(path.format(name))
             #-----
 
+            #+++++
             w_star = lp.physics.w_star(sim)
             T_conv = sim.inv_depth/w_star
         
@@ -44,16 +44,16 @@ for diam in diams:
             options = dict(minmass=vortex_pmass, max_iterations=300, engine="numba", characterize=True)
             #-----
         
-            #-----
+            #+++++ Read data
             print("Reading data from disk")
-            ds = xr.open_dataset(f"data/vort_{name}.nc")
-            ds_filt = xr.open_dataset(f"data/surf_filtered_{name}.nc")
+            ds = xr.open_dataset(f"data/vort_{name}.nc", chunks=dict(itime=1))
+            ds_filt = xr.open_dataset(f"data/surf_filtered_{name}.nc", chunks=dict(itime=1))
         
             ds = ds.sel(z=depth, method="nearest")
             ds_filt = ds_filt.sel(z=depth, method="nearest")
             #-----
         
-            #------
+            #+++++
             print("Rescaling data")
             ζ = ds.ζ * T_conv
             ζ_pos = ζ.where(ζ>0, 0)
@@ -61,11 +61,12 @@ for diam in diams:
             #-----
         
         
-            #-----
-            # Identify the DDVs
+            #+++++
+            # Identify the DDVs and then link them in time
             frames_pos = pims.Frame(abs(ζ_pos.transpose("itime", "y", "x")).values)
             frames_neg = pims.Frame(abs(ζ_neg.transpose("itime", "y", "x")).values)
         
+            tp.quiet(True)
             f_pos = tp.batch(frames_pos, pixelsize, **options);
             f_neg = tp.batch(frames_neg, pixelsize, **options);
             print(f"len(positive): {len(f_pos)}, len(negative): {len(f_neg)}")
@@ -82,10 +83,11 @@ for diam in diams:
                 t_neg.index = t_neg.index + max(t_pos.index) + 1
                 t_neg.particle = t_neg.particle + max(t_pos.particle) + 1
                 t = pd.concat([t_pos, t_neg])
+            tp.quiet(False)
             #-----
         
-            #-----
-            # Interpolating location to physical units
+            #+++++
+            print("Interpolating location to physical units")
             Y = np.interp(t.y, np.arange(0, len(ds.y)), ds.y)
             X = np.interp(t.x, np.arange(0, len(ds.x)), ds.x)
     
@@ -94,15 +96,15 @@ for diam in diams:
             t.index.name="ddv"
             #-----
 
-            #-----
-            # Get rid of spurious DDVs that are too diffuseand too weak
+            #+++++
+            # Get rid of spurious DDVs that are too diffuse and too weak
             if 0:
                 s90 = np.percentile(t["size"], 90)
                 m10 = np.percentile(t["mass"], 10)
                 t = t[((t['mass'] > m10) | (t['size'] < s90))]
             #-----
         
-            #-----
+            #+++++
             hdiv_ddvs, hdiv_filt_ddvs, ζ_ddvs, ζ_filt_ddvs = [], [], [], []
             print("Getting hdiv and ζ in cores",)
             for index in t.index:
@@ -114,19 +116,19 @@ for diam in diams:
                 hdiv_ddv = ds.hdiv.sel(itime=ddv.itime).interp(x=ddv.X, y=ddv.Y)
                 hdiv_filt_ddv = ds_filt.hdiv.sel(itime=ddv.itime).interp(x=ddv.X, y=ddv.Y)
         
-                ζ_ddvs.append(ζ_ddv.item())
-                ζ_filt_ddvs.append(ζ_filt_ddv.item())
-                hdiv_ddvs.append(hdiv_ddv.item())
-                hdiv_filt_ddvs.append(hdiv_filt_ddv.item())
+                ζ_ddvs.append(float(ζ_ddv))
+                ζ_filt_ddvs.append(float(ζ_filt_ddv))
+                hdiv_ddvs.append(float(hdiv_ddv))
+                hdiv_filt_ddvs.append(float(hdiv_filt_ddv))
             t["ζ"] = ζ_ddvs
             t["ζ_filt"] = ζ_filt_ddvs
             t["hdiv"] = hdiv_ddvs
             t["hdiv_filt"] = hdiv_filt_ddvs
-            print("done")
             #-----
         
         
-            #-----
+            #+++++
+            print("Writing data to ", end="")
             ds_ddvs = xr.Dataset.from_dataframe(t)
             ds_ddvs.attrs = dict(T_conv=T_conv, vortex_dsize=vortex_dsize, vortex_dcirc=vortex_dcirc)
             label = f"_d{pixelsize}_m{vortex_dcirc}"
@@ -134,9 +136,14 @@ for diam in diams:
             system(f"mkdir -p data")
             system(f"mkdir -p track_check")
 
-            ds_ddvs.to_netcdf(f"sweep/data/ddvs_{name}{label}.nc")
+            outname = f"sweep/data/ddvs_{name}{label}.nc"
+            print(outname)
+            delayed_nc = ds_ddvs.to_netcdf(outname, compute=False)
+            with ProgressBar():
+                results = delayed_nc.compute()
             #-----
 
+            #+++++ Plotting
             if 0:
                 from matplotlib import pyplot as plt
                 from matplotlib.patches import Circle
@@ -169,7 +176,4 @@ for diam in diams:
                 ax.set_aspect("equal")
                 fig.savefig(f"sweep/track_check/track_{name}{label}.png")
                 plt.close()
-            
-    
-    
-            
+                #-----
