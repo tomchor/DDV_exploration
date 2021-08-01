@@ -24,11 +24,12 @@ for nn, name in enumerate(names):
         out = lp.Output(path.format(name)+'/output')
     #-----
 
+
+    #+++++
+    # Adjustments
     w_star = lp.physics.w_star(sim)
     T_conv = sim.inv_depth/w_star
 
-    #+++++
-    # Pick a time
     if 0:
         levs = lp.utils.nearest(ds.z, -sim.z_i*np.array([0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 1/20, 0]))
         ds = ds.sel(z=levs)
@@ -57,6 +58,6 @@ for nn, name in enumerate(names):
     delayed_nc = ds_del.to_netcdf(outname, compute=False)
     with ProgressBar():
         results = delayed_nc.compute()
-    print(f"\nDone saving to {outname}")
+    print(f"Done saving to {outname}")
     #-----
 
